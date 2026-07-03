@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useStore } from '../store';
-import { Modal } from '../components/Modal';
+import BottomSheet from '../components/BottomSheet';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 import { Badge } from '../components/Badge';
@@ -103,7 +103,7 @@ export default React.memo(function ChecklistScreen() {
         <Text style={styles.fabText}>＋</Text>
       </TouchableOpacity>
 
-      <Modal visible={showModal} onClose={() => setShowModal(false)} title="Add Task">
+      <BottomSheet visible={showModal} onClose={() => setShowModal(false)} title="Add Task">
         <Input 
           label="Title" 
           value={form.title} 
@@ -146,7 +146,7 @@ export default React.memo(function ChecklistScreen() {
         />
         
         <Button title="Add Task" onPress={handleSave} style={{ marginTop: SPACING.sm }} />
-      </Modal>
+      </BottomSheet>
     </View>
   );
 });

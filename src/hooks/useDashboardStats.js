@@ -6,7 +6,7 @@ import { useStore } from '../store';
  * Keeps Dashboard.js clean by centralizing calculations here.
  */
 export function useDashboardStats() {
-  const { tasks, pyqLogs, errors, mastery, settings } = useStore();
+  const { tasks, pyqs, mistakes, topics, settings } = useStore();
 
   const today = new Date();
   const todayStr = new Date(today.getTime() - today.getTimezoneOffset() * 60000)
@@ -44,15 +44,15 @@ export function useDashboardStats() {
     : Math.max(0, phase2Total - phase2Elapsed);
 
   // PYQ target
-  const pyqsDone = pyqLogs.length;
+  const pyqsDone = pyqs.length;
   const pyqsPerDayTarget = Math.ceil(Math.max(0, 5000 - pyqsDone) / (daysToGate || 1));
 
   // Today's snapshot
   const todaysTasks = tasks.filter((t) => t.date === todayStr);
   const todaysCompletedTasks = todaysTasks.filter((t) => t.completed).length;
-  const todaysPyqs = pyqLogs.filter((l) => l.date === todayStr);
+  const todaysPyqs = pyqs.filter((l) => l.date === todayStr);
   const subjectsStudiedToday = new Set(todaysPyqs.map((l) => l.subject)).size;
-  const weakTopicsCount = mastery.filter((m) => m.mastery < 50).length;
+  const weakTopicsCount = topics.filter((m) => m.mastery < 50).length;
 
   // This week's errors
   const startOfWeek = new Date(today);
@@ -60,7 +60,7 @@ export function useDashboardStats() {
   const startOfWeekStr = new Date(startOfWeek.getTime() - startOfWeek.getTimezoneOffset() * 60000)
     .toISOString()
     .split('T')[0];
-  const errorsThisWeek = errors.filter((e) => e.date >= startOfWeekStr).length;
+  const errorsThisWeek = mistakes.filter((e) => e.date >= startOfWeekStr).length;
 
   // Subject mastery averages
   const SUBJECTS = [
@@ -69,18 +69,36 @@ export function useDashboardStats() {
     'Digital Circuits', 'Electronic Devices', 'Control Systems', 'General Aptitude',
   ];
   const masteryAverages = SUBJECTS.map((sub) => {
-    const topics = mastery.filter((m) => m.subject === sub);
-    const avg = topics.length > 0
-      ? Math.round(topics.reduce((acc, m) => acc + m.mastery, 0) / topics.length)
-      : 0;
-    return { subject: sub, average: avg };
+    // Defensive: verify mastery array exists and is an array
+    if (!topics || !Array.isArray(topics)) {
+      return { subject: sub, average: 0 };
+    }
+    
+    const subTopics = topics.filter((m) => m && m.subject === sub);
+    if (!subTopics.length) {
+      return { subject: sub, average: 0 };
+    }
+    
+    // Defensive: validate and clamp each mastery value
+    const sum = subTopics.reduce((acc, m) => {
+      const val = m.mastery ?? 0;
+      // Ensure value is a number within valid range [0, 100]
+      const clampedVal = Math.max(0, Math.min(100, typeof val === 'number' ? val : 0));
+      return acc + clampedVal;
+    }, 0);
+    
+    const avg = Math.round(sum / subTopics.length);
+    // Final bounds check
+    const finalAvg = Math.max(0, Math.min(100, avg));
+    
+    return { subject: sub, average: finalAvg };
   });
 
   // Recent activity
   const recentActivities = [
-    ...pyqLogs.slice(-2).map((l) => ({ id: l.id, type: 'PYQ', text: `PYQ: ${l.subject}`, time: l.date })),
+    ...pyqs.slice(-2).map((l) => ({ id: l.id, type: 'PYQ', text: `PYQ: ${l.subject}`, time: l.date })),
     ...tasks.filter((t) => t.completed).slice(-2).map((t) => ({ id: t.id, type: 'Task', text: `Done: ${t.title}`, time: t.date })),
-    ...errors.slice(-1).map((e) => ({ id: e.id, type: 'Error', text: `Error: ${e.subject}`, time: e.date })),
+    ...mistakes.slice(-1).map((e) => ({ id: e.id, type: 'Error', text: `Error: ${e.subject}`, time: e.date })),
   ]
     .sort((a, b) => b.time.localeCompare(a.time))
     .slice(0, 5);

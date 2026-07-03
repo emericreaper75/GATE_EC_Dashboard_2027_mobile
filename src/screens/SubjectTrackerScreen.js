@@ -1,95 +1,144 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList } from 'react-native';
 import { useStore } from '../store';
-import { Card, CardHeader, CardContent } from '../components/Card';
 import { ProgressBar } from '../components/ProgressBar';
-import { Badge } from '../components/Badge';
-import { MasterySlider } from '../components/MasterySlider';
-import { Button } from '../components/Button';
+import SubjectMasteryModal from '../components/SubjectMasteryModal';
 import { COLORS } from '../styles/colors';
 import { SPACING } from '../styles/spacing';
 import { TYPOGRAPHY } from '../styles/typography';
 import { SUBJECTS } from '../utils/constants';
-import { masteryColor, masteryLabel, pct } from '../utils/helpers';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { masteryColor, pct } from '../utils/helpers';
+
+/**
+ * Calculate average mastery for a subject.
+ * Defensive: returns 0 for invalid inputs, clamps value to [0, 100].
+ */
+const calculateSubjectAverage = (subject, masteryArray) => {
+  if (!masteryArray || !Array.isArray(masteryArray)) return 0;
+  if (!subject || typeof subject !== 'string') return 0;
+  
+  const topics = masteryArray.filter((m) => m.subject === subject);
+  if (!topics.length) return 0;
+  
+  const sum = topics.reduce((acc, m) => {
+    const val = m.mastery ?? 0;
+    // Defensive guard: ensure mastery is within bounds
+    if (typeof val !== 'number' || val < 0 || val > 100) {
+      return acc + Math.max(0, Math.min(100, val || 0));
+    }
+    return acc + val;
+  }, 0);
+  
+  const avg = Math.round(sum / topics.length);
+  // Final bounds check
+  const finalAvg = Math.max(0, Math.min(100, avg));
+  
+  return finalAvg;
+};
+
+/**
+ * Memoized subject card component.
+ * Prevents unnecessary re-renders and eliminates closure issues.
+ */
+const SubjectCard = React.memo(function SubjectCard({ 
+  subject, 
+  average, 
+  showWeak, 
+  masteryData,
+  onPress 
+}) {
+  // Calculate topics dynamically but only when needed (within render)
+  const topics = masteryData.filter((m) => m.subject === subject);
+  const filtered = showWeak ? topics.filter((t) => t.mastery < 60) : topics;
+  
+  // Skip rendering if filter hides this card
+  if (showWeak && filtered.length === 0) return null;
+  
+  // Defensive: verify and clamp average value
+  const displayAvg = Math.max(0, Math.min(100, average ?? 0));
+
+  const color = masteryColor(displayAvg);
+
+  return (
+    <TouchableOpacity 
+      style={styles.subjectCard}
+      onPress={() => onPress(subject)}
+      activeOpacity={0.7}
+    >
+      <View style={styles.subjectHeader}>
+        <Text style={styles.subjectName}>{subject}</Text>
+        <Text style={[styles.subjectScore, { color }]}>
+          {pct(displayAvg)}
+        </Text>
+      </View>
+      
+      <View style={styles.masteryBar}>
+        <View 
+          style={[
+            styles.masteryBarFill,
+            { width: `${displayAvg}%`, backgroundColor: color }
+          ]}
+        />
+      </View>
+      
+      <Text style={styles.tapHint}>Tap to adjust topics</Text>
+    </TouchableOpacity>
+  );
+});
 
 export default React.memo(function SubjectTrackerScreen() {
-  const { mastery, updateMastery } = useStore();
-  const [expanded, setExpanded] = useState(null);
-  const [showWeak, setShowWeak] = useState(false);
+  const { topics } = useStore();
+  const [selectedSubject, setSelectedSubject] = useState(null);
+  const [showModal, setShowModal] = useState(false);
   const [sortBy, setSortBy] = useState('name');
+  const [showWeak, setShowWeak] = useState(false);
 
-  const getAvg = useCallback((sub) => {
-    const topics = mastery.filter((m) => m.subject === sub);
-    if (!topics.length) return 0;
-    return Math.round(topics.reduce((a, m) => a + m.mastery, 0) / topics.length);
-  }, [mastery]);
+  // Memoize average calculations with stable dependencies
+  const subjectAverages = useMemo(() => {
+    const averages = {};
+    SUBJECTS.forEach((subject) => {
+      averages[subject] = calculateSubjectAverage(subject, topics);
+    });
+    return averages;
+  }, [topics]);
 
-  const sorted = useMemo(() => [...SUBJECTS].sort((a, b) =>
-    sortBy === 'mastery' ? getAvg(b) - getAvg(a) : a.localeCompare(b)
-  ), [sortBy, getAvg]);
+  // Sort subjects based on averages or name
+  const sorted = useMemo(() => {
+    const sorted = [...SUBJECTS];
+    if (sortBy === 'mastery') {
+      sorted.sort((a, b) => (subjectAverages[b] ?? 0) - (subjectAverages[a] ?? 0));
+    } else {
+      sorted.sort((a, b) => a.localeCompare(b));
+    }
+    return sorted;
+  }, [sortBy, subjectAverages]);
 
   const handleSortBy = useCallback((s) => setSortBy(s), []);
   const toggleShowWeak = useCallback(() => setShowWeak((prev) => !prev), []);
-  const handleToggleExpand = useCallback((subject) => setExpanded((prev) => prev === subject ? null : subject), []);
 
-  const handleUpdateMastery = useCallback((id, val) => {
-    updateMastery(id, {
-      mastery: val,
-      lastUpdated: new Date().toISOString().split('T')[0],
-    });
-  }, [updateMastery]);
+  const handleSubjectTap = useCallback((subject) => {
+    setSelectedSubject(subject);
+    setShowModal(true);
+  }, []);
 
   const renderSubject = useCallback(({ item: subject }) => {
-    const avg = getAvg(subject);
-    const topics = mastery.filter((m) => m.subject === subject);
-    const filtered = showWeak ? topics.filter((t) => t.mastery < 60) : topics;
-    if (showWeak && filtered.length === 0) return null;
-    const isExpanded = expanded === subject;
-
+    // Defensive: verify subject is valid
+    if (!subject || typeof subject !== 'string') {
+      return null;
+    }
+    
+    const average = subjectAverages[subject] ?? 0;
+    
     return (
-      <View style={styles.subjectCard}>
-        <TouchableOpacity
-          style={[styles.subjectHeader, isExpanded && styles.subjectHeaderExpanded]}
-          onPress={() => handleToggleExpand(subject)}
-          activeOpacity={0.8}
-        >
-          <View style={styles.subjectLeft}>
-            <MaterialCommunityIcons
-              name={isExpanded ? 'chevron-up' : 'chevron-down'}
-              size={18} color={COLORS.text.muted}
-            />
-            <Text style={styles.subjectName}>{subject}</Text>
-          </View>
-          <View style={styles.subjectRight}>
-            <ProgressBar value={avg} height={5} style={{ width: 80, marginRight: SPACING.sm }} />
-            <Text style={[styles.subjectPct, { color: masteryColor(avg) }]}>{pct(avg)}</Text>
-          </View>
-        </TouchableOpacity>
-
-        {isExpanded && (
-          <View style={styles.topicList}>
-            {filtered.map((topic) => (
-              <View key={topic.id} style={styles.topicRow}>
-                <View style={styles.topicInfo}>
-                  <Text style={styles.topicName}>{topic.topic}</Text>
-                  <Text style={styles.topicMeta}>
-                    {masteryLabel(topic.mastery)} · Last: {topic.lastUpdated || 'Never'}
-                  </Text>
-                </View>
-                <View style={{ flex: 1, maxWidth: 160 }}>
-                  <MasterySlider
-                    value={topic.mastery}
-                    onSlidingComplete={(val) => handleUpdateMastery(topic.id, val)}
-                  />
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
-      </View>
+      <SubjectCard
+        subject={subject}
+        average={average}
+        showWeak={showWeak}
+        masteryData={topics}
+        onPress={handleSubjectTap}
+      />
     );
-  }, [getAvg, mastery, showWeak, expanded, handleToggleExpand, handleUpdateMastery]);
+  }, [subjectAverages, showWeak, topics, handleSubjectTap]);
 
   return (
     <View style={styles.container}>
@@ -109,14 +158,21 @@ export default React.memo(function SubjectTrackerScreen() {
 
       <FlatList
         data={sorted}
-        keyExtractor={(item) => item}
+        keyExtractor={(item, index) => `subject_${index}_${item}`}
         renderItem={renderSubject}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
-        initialNumToRender={10}
+        // Optimize rendering
+        removeClippedSubviews={true}
         maxToRenderPerBatch={10}
         updateCellsBatchingPeriod={50}
-        removeClippedSubviews={true}
+      />
+
+      {/* Modal for mastery adjustment */}
+      <SubjectMasteryModal
+        visible={showModal}
+        onClose={() => setShowModal(false)}
+        subject={selectedSubject}
       />
     </View>
   );
@@ -132,16 +188,46 @@ const styles = StyleSheet.create({
   chipTextActive: { color: COLORS.text.primary, fontWeight: TYPOGRAPHY.weights.semibold },
   chipTextDanger: { color: COLORS.accent.danger, fontWeight: TYPOGRAPHY.weights.semibold },
   content: { padding: SPACING.base, paddingBottom: 120 },
-  subjectCard: { backgroundColor: COLORS.bg.secondary, borderRadius: 10, borderWidth: 1, borderColor: COLORS.border, marginBottom: SPACING.sm, overflow: 'hidden' },
-  subjectHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: SPACING.md },
-  subjectHeaderExpanded: { borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: COLORS.bg.elevated },
-  subjectLeft: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, flex: 1 },
-  subjectName: { fontSize: TYPOGRAPHY.sizes.md, fontWeight: TYPOGRAPHY.weights.semibold, color: COLORS.text.primary, flex: 1 },
-  subjectRight: { flexDirection: 'row', alignItems: 'center' },
-  subjectPct: { fontSize: TYPOGRAPHY.sizes.sm, fontWeight: TYPOGRAPHY.weights.bold, width: 40, textAlign: 'right' },
-  topicList: { padding: SPACING.md },
-  topicRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, paddingVertical: SPACING.sm, borderBottomWidth: 1, borderBottomColor: COLORS.border },
-  topicInfo: { flex: 1 },
-  topicName: { fontSize: TYPOGRAPHY.sizes.sm, color: COLORS.text.primary, fontWeight: TYPOGRAPHY.weights.medium },
-  topicMeta: { fontSize: TYPOGRAPHY.sizes.xs, color: COLORS.text.muted, marginTop: 2 },
+  subjectCard: {
+    backgroundColor: COLORS.bg.secondary,
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 0.5,
+    borderColor: COLORS.border
+  },
+  subjectHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10
+  },
+  subjectName: {
+    fontSize: TYPOGRAPHY.sizes.md,
+    fontWeight: TYPOGRAPHY.weights.semibold,
+    color: COLORS.text.primary,
+    flex: 1
+  },
+  subjectScore: {
+    fontSize: TYPOGRAPHY.sizes.lg,
+    fontWeight: TYPOGRAPHY.weights.bold,
+    minWidth: 40,
+    textAlign: 'right'
+  },
+  masteryBar: {
+    height: 6,
+    backgroundColor: COLORS.border,
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginBottom: 6
+  },
+  masteryBarFill: {
+    height: '100%',
+    borderRadius: 3
+  },
+  tapHint: {
+    fontSize: TYPOGRAPHY.sizes.xs,
+    color: COLORS.text.muted,
+    fontStyle: 'italic'
+  }
 });

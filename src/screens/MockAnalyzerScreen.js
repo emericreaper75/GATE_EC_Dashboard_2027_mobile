@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView } from 'react-native';
 import { useStore } from '../store';
-import { Modal } from '../components/Modal';
+import BottomSheet from '../components/BottomSheet';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 import { Badge } from '../components/Badge';
@@ -110,7 +110,7 @@ export default React.memo(function MockAnalyzerScreen() {
         <Text style={styles.fabText}>＋</Text>
       </TouchableOpacity>
 
-      <Modal visible={showModal} onClose={() => setShowModal(false)} title="Add Mock Result">
+      <BottomSheet visible={showModal} onClose={() => setShowModal(false)} title="Add Mock Result">
         <Text style={styles.label}>Test Type</Text>
         <View style={styles.toggleRow}>
           {['Full', 'Subject', 'Sectional'].map((t) => (
@@ -145,7 +145,7 @@ export default React.memo(function MockAnalyzerScreen() {
 
         <Input label="Notes" value={form.notes} onChangeText={(v) => setForm({ ...form, notes: v })} placeholder="Observations, weak areas..." multiline />
         <Button title="Save Mock" onPress={handleAdd} style={{ marginTop: SPACING.sm }} />
-      </Modal>
+      </BottomSheet>
     </View>
   );
 });

@@ -6,7 +6,9 @@ import { RADIUS } from '../styles/spacing';
 export function ProgressBar({ value = 0, color, height = 6, style }) {
   const animWidth = useRef(new Animated.Value(0)).current;
 
-  const clampedValue = Math.min(100, Math.max(0, value));
+  // Defensive: ensure value is within [0, 100]
+  const clampedValue = Math.max(0, Math.min(100, typeof value === 'number' ? value : 0));
+
   const barColor = color || (
     clampedValue >= 75 ? COLORS.accent.success :
     clampedValue >= 50 ? COLORS.accent.warning :

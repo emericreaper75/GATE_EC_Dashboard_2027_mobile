@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
 import { useStore } from '../store';
-import { Modal } from '../components/Modal';
+import BottomSheet from '../components/BottomSheet';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 import { Badge } from '../components/Badge';
@@ -13,15 +13,18 @@ import { TYPOGRAPHY } from '../styles/typography';
 import { SUBJECTS, MARKS_TYPES, QUESTION_TYPES, PYQ_RESULTS, ERROR_TYPES } from '../utils/constants';
 import { getTodayStr, formatDate } from '../utils/helpers';
 import { useNavigation } from '@react-navigation/native';
+import NotesComponent from '../components/NotesComponent';
+import { searchNotes } from '../utils/notesSearch';
 
 const RESULT_VARIANT = { 'Correct ✅': 'success', 'Wrong ❌': 'danger', 'Skipped ⏭️': 'warning' };
 
 export default React.memo(function PYQLogScreen() {
-  const { pyqLogs, addPYQLog, deletePYQLog } = useStore();
+  const { pyqs, addPYQ, deletePYQ, addMistake } = useStore();
   const nav = useNavigation();
   const [showModal, setShowModal] = useState(false);
   const [filterSub, setFilterSub] = useState('All');
   const [filterResult, setFilterResult] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
   const [form, setForm] = useState({
     subject: 'Networks', topic: '', year: '2024',
     marksType: '1-mark', questionType: 'MCQ',
@@ -30,31 +33,58 @@ export default React.memo(function PYQLogScreen() {
 
   const today = getTodayStr();
 
-  const filtered = useMemo(() => pyqLogs.filter((l) => {
-    if (filterSub !== 'All' && l.subject !== filterSub) return false;
-    if (filterResult !== 'All' && l.result !== filterResult) return false;
-    return true;
-  }).reverse(), [pyqLogs, filterSub, filterResult]);
+  const filtered = useMemo(() => {
+    const resultList = pyqs.filter((l) => {
+      if (filterSub !== 'All' && l.subject !== filterSub) return false;
+      if (filterResult !== 'All' && l.result !== filterResult) return false;
+      return true;
+    }).reverse();
+    return searchNotes(resultList, searchQuery);
+  }, [pyqs, filterSub, filterResult, searchQuery]);
 
   // Stats
   const { total, correct, accuracy, todayCount } = useMemo(() => {
-    const t = pyqLogs.length;
-    const c = pyqLogs.filter((l) => l.result === 'Correct ✅').length;
+    const t = pyqs.length;
+    const c = pyqs.filter((l) => l.correct || l.result === 'Correct ✅').length;
     const acc = t > 0 ? Math.round((c / t) * 100) : 0;
-    const tc = pyqLogs.filter((l) => l.date === today).length;
+    const tc = pyqs.filter((l) => l.date === today).length;
     return { total: t, correct: c, accuracy: acc, todayCount: tc };
-  }, [pyqLogs, today]);
+  }, [pyqs, today]);
 
   const handleAdd = useCallback(() => {
     if (!form.topic.trim()) return;
-    addPYQLog({ ...form, date: today, timeTaken: parseFloat(form.timeTaken) || 2 });
+    const pyqId = Date.now().toString(); // simple ID gen
+    const isCorrect = form.result === 'Correct ✅';
+    
+    addPYQ({ 
+      ...form, 
+      id: pyqId,
+      date: today, 
+      timeTaken: parseFloat(form.timeTaken) || 2,
+      correct: isCorrect,
+      solved: true
+    });
+    
+    if (!isCorrect) {
+      addMistake({
+        subject: form.subject,
+        topic: form.topic,
+        pyqId: pyqId,
+        mistakeCategory: 'Concept Gap',
+        reason: form.notes || 'Incorrect in PYQ',
+        correction: '',
+        resolved: false,
+        date: today
+      });
+    }
+
     setForm({ subject: 'Networks', topic: '', year: '2024', marksType: '1-mark', questionType: 'MCQ', result: 'Correct ✅', timeTaken: '2', notes: '' });
     setShowModal(false);
-  }, [form, addPYQLog, today]);
+  }, [form, addPYQ, addMistake, today]);
 
   const handleDelete = useCallback((id) => {
-    deletePYQLog(id);
-  }, [deletePYQLog]);
+    deletePYQ(id);
+  }, [deletePYQ]);
 
   const handleNavigateMock = useCallback(() => nav.navigate('MockAnalyzer'), [nav]);
 
@@ -70,7 +100,11 @@ export default React.memo(function PYQLogScreen() {
           <Badge label={item.result} variant={RESULT_VARIANT[item.result] || 'muted'} />
           <Text style={styles.logDetail}>{item.timeTaken}min · {formatDate(item.date)}</Text>
         </View>
-        {item.notes ? <Text style={styles.logNotes} numberOfLines={1}>{item.notes}</Text> : null}
+        {item.notes ? (
+          <Text style={styles.notesPreview} numberOfLines={1}>
+            {item.notes.substring(0, 60)}{item.notes.length > 60 ? '...' : ''}
+          </Text>
+        ) : null}
       </View>
       <TouchableOpacity onPress={() => handleDelete(item.id)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
         <Text style={styles.deleteBtn}>✕</Text>
@@ -90,14 +124,24 @@ export default React.memo(function PYQLogScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Filters */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterBar} contentContainerStyle={styles.filterContent}>
-        {['All', ...SUBJECTS].map((s) => (
-          <TouchableOpacity key={s} onPress={() => setFilterSub(s)} style={[styles.chip, filterSub === s && styles.chipActive]}>
-            <Text style={[styles.chipText, filterSub === s && styles.chipTextActive]}>{s}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      {/* Filters & Search */}
+      <View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterBar} contentContainerStyle={styles.filterContent}>
+          {['All', ...SUBJECTS].map((s) => (
+            <TouchableOpacity key={s} onPress={() => setFilterSub(s)} style={[styles.chip, filterSub === s && styles.chipActive]}>
+              <Text style={[styles.chipText, filterSub === s && styles.chipTextActive]}>{s}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+        <View style={styles.searchContainer}>
+          <Input 
+            placeholder="Search notes and topics..." 
+            value={searchQuery} 
+            onChangeText={setSearchQuery} 
+            style={styles.searchInput}
+          />
+        </View>
+      </View>
 
       <FlatList
         data={filtered}
@@ -115,7 +159,7 @@ export default React.memo(function PYQLogScreen() {
         <Text style={styles.fabText}>＋</Text>
       </TouchableOpacity>
 
-      <Modal visible={showModal} onClose={() => setShowModal(false)} title="Log PYQ">
+      <BottomSheet visible={showModal} onClose={() => setShowModal(false)} title="Log PYQ">
         <Input label="Topic / Question" value={form.topic} onChangeText={(v) => setForm({ ...form, topic: v })} placeholder="e.g. Z-transform ROC question" multiline numberOfLines={2} autoFocus />
 
         <Text style={styles.label}>Subject</Text>
@@ -154,9 +198,14 @@ export default React.memo(function PYQLogScreen() {
           ))}
         </View>
 
-        <Input label="Notes (optional)" value={form.notes} onChangeText={(v) => setForm({ ...form, notes: v })} placeholder="Any observations..." multiline />
+        <NotesComponent
+          initialNotes={form.notes || ''}
+          onNotesChange={(text) => setForm({ ...form, notes: text })}
+          placeholder="What went wrong? Why did you miss this?"
+        />
+        
         <Button title="Log PYQ" onPress={handleAdd} style={{ marginTop: SPACING.sm }} />
-      </Modal>
+      </BottomSheet>
     </View>
   );
 });
@@ -184,7 +233,9 @@ const styles = StyleSheet.create({
   logTopic: { fontSize: TYPOGRAPHY.sizes.base, color: COLORS.text.primary, fontWeight: TYPOGRAPHY.weights.medium, marginBottom: SPACING.xs },
   logMeta: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: SPACING.xs, marginBottom: 4 },
   logDetail: { fontSize: TYPOGRAPHY.sizes.xs, color: COLORS.text.muted },
-  logNotes: { fontSize: TYPOGRAPHY.sizes.xs, color: COLORS.text.muted, fontStyle: 'italic', marginTop: 2 },
+  notesPreview: { fontSize: 11, color: COLORS.text.muted, fontStyle: 'italic', marginTop: 2 },
+  searchContainer: { paddingHorizontal: SPACING.base, paddingBottom: SPACING.sm, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  searchInput: { marginBottom: 0 },
   deleteBtn: { color: COLORS.text.muted, fontSize: 14, marginLeft: SPACING.sm },
   fab: { position: 'absolute', bottom: 24, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: COLORS.accent.primary, justifyContent: 'center', alignItems: 'center', elevation: 8 },
   fabText: { fontSize: 28, color: COLORS.text.primary, lineHeight: 32 },

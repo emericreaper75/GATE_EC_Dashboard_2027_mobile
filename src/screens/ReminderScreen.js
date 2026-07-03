@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Switch } from 'react-native';
 import { useStore } from '../store';
-import { Modal } from '../components/Modal';
+import BottomSheet from '../components/BottomSheet';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 import { Badge } from '../components/Badge';
@@ -89,7 +89,7 @@ export default React.memo(function ReminderScreen() {
         <Text style={styles.fabText}>＋</Text>
       </TouchableOpacity>
 
-      <Modal visible={showModal} onClose={() => setShowModal(false)} title={editItem ? 'Edit Reminder' : 'Add Reminder'}>
+      <BottomSheet visible={showModal} onClose={() => setShowModal(false)} title={editItem ? 'Edit Reminder' : 'Add Reminder'}>
         <Input label="Title" value={form.title} onChangeText={(v) => setForm({ ...form, title: v })} placeholder="e.g. Morning Formula Review" autoFocus />
         <Input label="Message" value={form.message} onChangeText={(v) => setForm({ ...form, message: v })} placeholder="Optional reminder message..." multiline />
         <Input label="Time (HH:MM)" value={form.time} onChangeText={(v) => setForm({ ...form, time: v })} placeholder="08:00" keyboardType="numbers-and-punctuation" />
@@ -104,7 +104,7 @@ export default React.memo(function ReminderScreen() {
         </View>
 
         <Button title={editItem ? 'Save Changes' : 'Add Reminder'} onPress={handleSave} style={{ marginTop: SPACING.sm }} />
-      </Modal>
+      </BottomSheet>
     </View>
   );
 });

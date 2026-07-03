@@ -11,16 +11,22 @@ import { SPACING } from '../styles/spacing';
 import { TYPOGRAPHY } from '../styles/typography';
 import { masteryColor, pct } from '../utils/helpers';
 
+const FEATURE_CARDS = [
+  { id: 1, title: '📝 Error Journal', subtitle: 'Learn from mistakes', route: 'ErrorJournal' },
+  { id: 2, title: '📊 PYQ Log', subtitle: 'Track accuracy & stats', route: 'PYQLog' },
+  { id: 3, title: '🧠 Formula Review', subtitle: 'Flashcard practice', route: 'FormulaSheet' },
+  { id: 4, title: '📈 Mock Analyzer', subtitle: 'Track performance', route: 'MockAnalyzer' },
+  { id: 5, title: '📖 Weekly Review', subtitle: 'Sunday reflection', route: 'WeeklyReview' },
+  { id: 6, title: '🗺 Strategic Plan', subtitle: '7-month roadmap', route: 'StrategyPlan' }
+];
+
 export default React.memo(function DashboardScreen() {
   const stats = useDashboardStats();
   const nav = useNavigation();
 
-  const handleNavTasks = useCallback(() => nav.navigate('TasksStack', { screen: 'Checklist' }), [nav]);
-  const handleNavPYQ = useCallback(() => nav.navigate('PYQStack', { screen: 'PYQLog' }), [nav]);
-  const handleNavError = useCallback(() => nav.navigate('MoreStack', { screen: 'ErrorJournal' }), [nav]);
-  const handleNavSubjects = useCallback(() => nav.navigate('SubjectsStack', { screen: 'SubjectTracker' }), [nav]);
-  const handleNavMock = useCallback(() => nav.navigate('PYQStack', { screen: 'MockAnalyzer' }), [nav]);
-  const handleNavTimer = useCallback(() => nav.navigate('MoreStack', { screen: 'FocusTimer' }), [nav]);
+  const handleCardPress = useCallback((route) => {
+    nav.navigate('HomeStack', { screen: route });
+  }, [nav]);
 
   return (
     <ScrollView
@@ -90,15 +96,28 @@ export default React.memo(function DashboardScreen() {
         </CardContent>
       </Card>
 
-      {/* ── Quick Actions ─────────────────────────────────────────── */}
-      <Text style={styles.quickTitle}>QUICK ACTIONS</Text>
-      <View style={styles.quickGrid}>
-        <QuickAction icon="checkbox-marked-outline" label="Add Task" onPress={handleNavTasks} />
-        <QuickAction icon="clipboard-list-outline" label="Log PYQ" onPress={handleNavPYQ} />
-        <QuickAction icon="alert-circle-outline" label="Log Error" onPress={handleNavError} />
-        <QuickAction icon="book-open-outline" label="Subjects" onPress={handleNavSubjects} />
-        <QuickAction icon="flask-outline" label="Mock Exam" onPress={handleNavMock} />
-        <QuickAction icon="timer-outline" label="Focus Timer" onPress={handleNavTimer} />
+      {/* ── Feature Cards Grid ──────────────────────────────────────── */}
+      <Text style={styles.sectionTitle}>Quick Access</Text>
+      <View style={styles.cardsGrid}>
+        {FEATURE_CARDS.map(card => (
+          <TouchableOpacity
+            key={card.id}
+            style={styles.featureCard}
+            onPress={() => handleCardPress(card.route)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.cardTitle}>{card.title}</Text>
+            <Text style={styles.cardSubtitle}>{card.subtitle}</Text>
+            <Text style={styles.cardArrow}>→</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* ── Motivation ────────────────────────────────────────────── */}
+      <View style={styles.motivationCard}>
+        <Text style={styles.motivationText}>
+          "Today's work moves the needle on the 20% that matters"
+        </Text>
       </View>
 
       {/* ── Recent Activity ───────────────────────────────────────── */}
@@ -133,16 +152,7 @@ const StatTile = React.memo(function StatTile({ label, value, color }) {
   );
 });
 
-const QuickAction = React.memo(function QuickAction({ icon, label, onPress }) {
-  return (
-    <TouchableOpacity style={styles.quickItem} onPress={onPress} activeOpacity={0.75}>
-      <View style={styles.quickIcon}>
-        <MaterialCommunityIcons name={icon} size={22} color={COLORS.accent.primary} />
-      </View>
-      <Text style={styles.quickLabel}>{label}</Text>
-    </TouchableOpacity>
-  );
-});
+
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg.primary },
@@ -183,12 +193,53 @@ const styles = StyleSheet.create({
   masteryPct: { fontSize: TYPOGRAPHY.sizes.sm, fontWeight: TYPOGRAPHY.weights.semibold },
   masteryBar: { marginTop: 0 },
 
-  // Quick actions
-  quickTitle: { fontSize: TYPOGRAPHY.sizes.xs, color: COLORS.text.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: SPACING.sm },
-  quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm, marginBottom: SPACING.base },
-  quickItem: { width: '30%', backgroundColor: COLORS.bg.secondary, borderRadius: 10, borderWidth: 1, borderColor: COLORS.border, padding: SPACING.md, alignItems: 'center', gap: SPACING.xs },
-  quickIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(59,130,246,0.1)', justifyContent: 'center', alignItems: 'center' },
-  quickLabel: { fontSize: TYPOGRAPHY.sizes.xs, color: COLORS.text.secondary, textAlign: 'center' },
+  // Quick actions / Cards
+  cardsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 24
+  },
+  featureCard: {
+    width: '48%',
+    backgroundColor: COLORS.bg.secondary,
+    borderRadius: 10,
+    padding: 14,
+    borderWidth: 0.5,
+    borderColor: COLORS.border,
+    minHeight: 100,
+    justifyContent: 'space-between'
+  },
+  cardTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.text.primary
+  },
+  cardSubtitle: {
+    fontSize: 11,
+    color: COLORS.text.secondary,
+    marginTop: 4
+  },
+  cardArrow: {
+    fontSize: 16,
+    color: COLORS.accent.primary,
+    marginTop: 8,
+    fontWeight: '700'
+  },
+  motivationCard: {
+    backgroundColor: COLORS.bg.secondary,
+    borderRadius: 10,
+    padding: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.accent.success,
+    marginBottom: 20
+  },
+  motivationText: {
+    fontSize: 13,
+    fontStyle: 'italic',
+    color: COLORS.text.secondary,
+    lineHeight: 20
+  },
 
   // Activity
   actRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: SPACING.xs, gap: SPACING.sm },

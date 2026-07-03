@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView } from 'react-native';
 import { useStore } from '../store';
-import { Modal } from '../components/Modal';
+import BottomSheet from '../components/BottomSheet';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 import { Badge } from '../components/Badge';
@@ -12,44 +12,50 @@ import { SPACING } from '../styles/spacing';
 import { TYPOGRAPHY } from '../styles/typography';
 import { SUBJECTS, ERROR_TYPES, ERROR_LOG_STATUSES } from '../utils/constants';
 import { getTodayStr, formatDate } from '../utils/helpers';
+import NotesComponent from '../components/NotesComponent';
+import { searchNotes } from '../utils/notesSearch';
 
 const STATUS_VARIANT = { Pending: 'danger', 'Re-attempted': 'warning', Mastered: 'success' };
 
 export default React.memo(function ErrorJournalScreen() {
-  const { errors, addErrorLog, updateErrorLog, deleteErrorLog } = useStore();
+  const { mistakes, addMistake, updateMistake, deleteMistake } = useStore();
   const [showModal, setShowModal] = useState(false);
   const [filterSub, setFilterSub] = useState('All');
   const [filterStatus, setFilterStatus] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
   const [form, setForm] = useState({
     subject: 'Networks', topic: '', source: '',
     thought: '', correctAnswer: '', ruleViolated: '',
-    errorType: 'Concept Gap', status: 'Pending',
+    errorType: 'Concept Gap', status: 'Pending', notes: ''
   });
 
   const today = getTodayStr();
 
-  const filtered = useMemo(() => errors.filter((e) => {
-    if (filterSub !== 'All' && e.subject !== filterSub) return false;
-    if (filterStatus !== 'All' && e.status !== filterStatus) return false;
-    return true;
-  }).reverse(), [errors, filterSub, filterStatus]);
+  const filtered = useMemo(() => {
+    const resultList = mistakes.filter((e) => {
+      if (filterSub !== 'All' && e.subject !== filterSub) return false;
+      if (filterStatus !== 'All' && e.status !== filterStatus) return false;
+      return true;
+    }).reverse();
+    return searchNotes(resultList, searchQuery);
+  }, [mistakes, filterSub, filterStatus, searchQuery]);
 
   const handleAdd = useCallback(() => {
     if (!form.topic.trim()) return;
-    addErrorLog({ ...form, date: today });
-    setForm({ subject: 'Networks', topic: '', source: '', thought: '', correctAnswer: '', ruleViolated: '', errorType: 'Concept Gap', status: 'Pending' });
+    addMistake({ ...form, date: today });
+    setForm({ subject: 'Networks', topic: '', source: '', thought: '', correctAnswer: '', ruleViolated: '', errorType: 'Concept Gap', status: 'Pending', notes: '' });
     setShowModal(false);
-  }, [form, addErrorLog, today]);
+  }, [form, addMistake, today]);
 
   const cycleStatus = useCallback((e) => {
     const idx = ERROR_LOG_STATUSES.indexOf(e.status);
     const next = ERROR_LOG_STATUSES[(idx + 1) % ERROR_LOG_STATUSES.length];
-    updateErrorLog(e.id, { status: next });
-  }, [updateErrorLog]);
+    updateMistake(e.id, { status: next, resolved: next === 'Mastered' });
+  }, [updateMistake]);
 
   const handleDelete = useCallback((id) => {
-    deleteErrorLog(id);
-  }, [deleteErrorLog]);
+    deleteMistake(id);
+  }, [deleteMistake]);
 
   const renderItem = useCallback(({ item }) => (
     <View style={styles.errorCard}>
@@ -83,6 +89,11 @@ export default React.memo(function ErrorJournalScreen() {
           <Text style={styles.detailText}>{item.correctAnswer}</Text>
         </View>
       ) : null}
+      {item.notes ? (
+        <Text style={styles.notesPreview} numberOfLines={1}>
+          {item.notes.substring(0, 60)}{item.notes.length > 60 ? '...' : ''}
+        </Text>
+      ) : null}
     </View>
   ), [cycleStatus, handleDelete]);
 
@@ -104,6 +115,15 @@ export default React.memo(function ErrorJournalScreen() {
           ))}
         </ScrollView>
       </View>
+      
+      <View style={styles.searchContainer}>
+        <Input 
+          placeholder="Search errors and notes..." 
+          value={searchQuery} 
+          onChangeText={setSearchQuery} 
+          style={styles.searchInput}
+        />
+      </View>
 
       <FlatList
         data={filtered}
@@ -121,7 +141,7 @@ export default React.memo(function ErrorJournalScreen() {
         <Text style={styles.fabText}>＋</Text>
       </TouchableOpacity>
 
-      <Modal visible={showModal} onClose={() => setShowModal(false)} title="Log Error">
+      <BottomSheet visible={showModal} onClose={() => setShowModal(false)} title="Log Error">
         <Input label="Topic / Question" value={form.topic} onChangeText={(v) => setForm({ ...form, topic: v })} placeholder="What did you get wrong?" autoFocus />
 
         <Text style={styles.label}>Subject</Text>
@@ -147,8 +167,14 @@ export default React.memo(function ErrorJournalScreen() {
           ))}
         </View>
 
+        <NotesComponent
+          initialNotes={form.notes || ''}
+          onNotesChange={(text) => setForm({ ...form, notes: text })}
+          placeholder="What rule did I violate? How to avoid next time?"
+        />
+
         <Button title="Log Error" onPress={handleAdd} style={{ marginTop: SPACING.sm }} />
-      </Modal>
+      </BottomSheet>
     </View>
   );
 });
@@ -169,7 +195,10 @@ const styles = StyleSheet.create({
   errorDetail: { marginTop: SPACING.xs },
   detailLabel: { fontSize: TYPOGRAPHY.sizes.xs, color: COLORS.accent.danger, fontWeight: TYPOGRAPHY.weights.semibold, textTransform: 'uppercase', marginBottom: 2 },
   detailText: { fontSize: TYPOGRAPHY.sizes.sm, color: COLORS.text.secondary, lineHeight: 18 },
+  notesPreview: { fontSize: 11, color: COLORS.text.muted, fontStyle: 'italic', marginTop: SPACING.sm },
   deleteBtn: { color: COLORS.text.muted, fontSize: 14 },
+  searchContainer: { paddingHorizontal: SPACING.base, paddingBottom: SPACING.sm, paddingTop: SPACING.xs, borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: COLORS.bg.primary },
+  searchInput: { marginBottom: 0 },
   fab: { position: 'absolute', bottom: 24, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: COLORS.accent.danger, justifyContent: 'center', alignItems: 'center', elevation: 8 },
   fabText: { fontSize: 28, color: COLORS.text.primary, lineHeight: 32 },
   label: { fontSize: TYPOGRAPHY.sizes.xs, color: COLORS.text.secondary, marginBottom: SPACING.xs, textTransform: 'uppercase', letterSpacing: 0.5 },
