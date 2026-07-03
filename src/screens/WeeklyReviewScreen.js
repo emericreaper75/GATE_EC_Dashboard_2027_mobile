@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView } from 'react-native';
 import { useStore } from '../store';
 import { Modal } from '../components/Modal';
@@ -11,7 +11,7 @@ import { TYPOGRAPHY } from '../styles/typography';
 import { SUBJECTS } from '../utils/constants';
 import { formatDate } from '../utils/helpers';
 
-export default function WeeklyReviewScreen() {
+export default React.memo(function WeeklyReviewScreen() {
   const { weeklyReviews, addWeeklyReview, deleteWeeklyReview } = useStore();
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({
@@ -19,7 +19,9 @@ export default function WeeklyReviewScreen() {
     accuracy: '', bestMockScore: '', wentWell: '', toFix: '', priorities: '',
   });
 
-  const handleAdd = () => {
+  const reversedReviews = useMemo(() => [...weeklyReviews].reverse(), [weeklyReviews]);
+
+  const handleAdd = useCallback(() => {
     if (!form.weekRange.trim()) return;
     addWeeklyReview({
       weekRange: form.weekRange,
@@ -36,36 +38,46 @@ export default function WeeklyReviewScreen() {
     });
     setForm({ weekRange: '', pyqsSolved: '', mocksTaken: '', accuracy: '', bestMockScore: '', wentWell: '', toFix: '', priorities: '' });
     setShowModal(false);
-  };
+  }, [form, addWeeklyReview]);
+
+  const handleDelete = useCallback((id) => {
+    deleteWeeklyReview(id);
+  }, [deleteWeeklyReview]);
+
+  const renderItem = useCallback(({ item }) => (
+    <View style={styles.reviewCard}>
+      <View style={styles.reviewHeader}>
+        <Text style={styles.reviewWeek}>{item.weekRange}</Text>
+        <TouchableOpacity onPress={() => handleDelete(item.id)}>
+          <Text style={styles.deleteBtn}>✕</Text>
+        </TouchableOpacity>
+      </View>
+      <View style={styles.reviewStats}>
+        <StatItem label="PYQs" value={item.pyqsSolved} />
+        <StatItem label="Mocks" value={item.mocksTaken} />
+        <StatItem label="Accuracy" value={`${item.accuracy}%`} color={item.accuracy >= 70 ? COLORS.accent.success : COLORS.accent.warning} />
+        <StatItem label="Best Mock" value={item.bestMockScore} color={COLORS.accent.primary} />
+      </View>
+      {item.wentWell ? <ReviewDetail label="✅ Went Well" text={item.wentWell} color={COLORS.accent.success} /> : null}
+      {item.toFix ? <ReviewDetail label="🔧 To Fix" text={item.toFix} color={COLORS.accent.danger} /> : null}
+      {item.priorities?.length > 0 ? (
+        <ReviewDetail label="🎯 Next Week" text={item.priorities.join(', ')} color={COLORS.accent.warning} />
+      ) : null}
+    </View>
+  ), [handleDelete]);
 
   return (
     <View style={styles.container}>
       <FlatList
-        data={[...weeklyReviews].reverse()}
+        data={reversedReviews}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        updateCellsBatchingPeriod={50}
+        removeClippedSubviews={true}
         ListEmptyComponent={<EmptyState icon="📅" title="No weekly reviews" subtitle="Tap + to add your first review" />}
-        renderItem={({ item }) => (
-          <View style={styles.reviewCard}>
-            <View style={styles.reviewHeader}>
-              <Text style={styles.reviewWeek}>{item.weekRange}</Text>
-              <TouchableOpacity onPress={() => deleteWeeklyReview(item.id)}>
-                <Text style={styles.deleteBtn}>✕</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.reviewStats}>
-              <StatItem label="PYQs" value={item.pyqsSolved} />
-              <StatItem label="Mocks" value={item.mocksTaken} />
-              <StatItem label="Accuracy" value={`${item.accuracy}%`} color={item.accuracy >= 70 ? COLORS.accent.success : COLORS.accent.warning} />
-              <StatItem label="Best Mock" value={item.bestMockScore} color={COLORS.accent.primary} />
-            </View>
-            {item.wentWell ? <ReviewDetail label="✅ Went Well" text={item.wentWell} color={COLORS.accent.success} /> : null}
-            {item.toFix ? <ReviewDetail label="🔧 To Fix" text={item.toFix} color={COLORS.accent.danger} /> : null}
-            {item.priorities?.length > 0 ? (
-              <ReviewDetail label="🎯 Next Week" text={item.priorities.join(', ')} color={COLORS.accent.warning} />
-            ) : null}
-          </View>
-        )}
+        renderItem={renderItem}
       />
 
       <TouchableOpacity style={styles.fab} onPress={() => setShowModal(true)}>
@@ -97,25 +109,25 @@ export default function WeeklyReviewScreen() {
       </Modal>
     </View>
   );
-}
+});
 
-function StatItem({ label, value, color }) {
+const StatItem = React.memo(function StatItem({ label, value, color }) {
   return (
     <View style={styles.statItem}>
       <Text style={styles.statLabel}>{label}</Text>
       <Text style={[styles.statVal, color && { color }]}>{value}</Text>
     </View>
   );
-}
+});
 
-function ReviewDetail({ label, text, color }) {
+const ReviewDetail = React.memo(function ReviewDetail({ label, text, color }) {
   return (
     <View style={styles.reviewDetail}>
       <Text style={[styles.detailLabel, { color }]}>{label}</Text>
       <Text style={styles.detailText}>{text}</Text>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg.primary },

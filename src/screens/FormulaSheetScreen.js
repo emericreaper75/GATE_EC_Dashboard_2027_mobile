@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView } from 'react-native';
 import { useStore } from '../store';
 import { Modal } from '../components/Modal';
@@ -15,7 +15,7 @@ import { formatDate } from '../utils/helpers';
 
 const CONFIDENCE_VARIANT = { Shaky: 'danger', Learning: 'warning', Confident: 'success' };
 
-export default function FormulaSheetScreen() {
+export default React.memo(function FormulaSheetScreen() {
   const { formulas, addFormula, updateFormula, deleteFormula } = useStore();
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem] = useState(null);
@@ -23,37 +23,63 @@ export default function FormulaSheetScreen() {
   const [filterConf, setFilterConf] = useState('All');
   const [form, setForm] = useState({ name: '', content: '', subject: 'Networks', topic: '', confidence: 'Shaky' });
 
-  const filtered = formulas.filter((f) => {
+  const filtered = useMemo(() => formulas.filter((f) => {
     if (filterSub !== 'All' && f.subject !== filterSub) return false;
     if (filterConf !== 'All' && f.confidence !== filterConf) return false;
     return true;
-  });
+  }), [formulas, filterSub, filterConf]);
 
-  const openAdd = () => {
+  const openAdd = useCallback(() => {
     setEditItem(null);
     setForm({ name: '', content: '', subject: 'Networks', topic: '', confidence: 'Shaky' });
     setShowModal(true);
-  };
+  }, []);
 
-  const openEdit = (f) => {
+  const openEdit = useCallback((f) => {
     setEditItem(f);
     setForm({ name: f.name, content: f.content, subject: f.subject, topic: f.topic, confidence: f.confidence });
     setShowModal(true);
-  };
+  }, []);
 
-  const handleSave = () => {
+  const handleSave = useCallback(() => {
     if (!form.name.trim()) return;
     const data = { ...form, lastReviewed: new Date().toISOString().split('T')[0] };
     if (editItem) updateFormula(editItem.id, data);
     else addFormula(data);
     setShowModal(false);
-  };
+  }, [form, editItem, updateFormula, addFormula]);
 
-  const cycleConfidence = (f) => {
+  const cycleConfidence = useCallback((f) => {
     const idx = FORMULA_CONFIDENCE.indexOf(f.confidence);
     const next = FORMULA_CONFIDENCE[(idx + 1) % FORMULA_CONFIDENCE.length];
     updateFormula(f.id, { confidence: next });
-  };
+  }, [updateFormula]);
+
+  const handleDelete = useCallback((id) => {
+    deleteFormula(id);
+  }, [deleteFormula]);
+
+  const renderItem = useCallback(({ item }) => (
+    <TouchableOpacity style={styles.card} onPress={() => openEdit(item)} activeOpacity={0.85}>
+      <View style={styles.cardTop}>
+        <Text style={styles.cardName} numberOfLines={1}>{item.name}</Text>
+        <View style={styles.cardActions}>
+          <TouchableOpacity onPress={() => cycleConfidence(item)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Badge label={item.confidence} variant={CONFIDENCE_VARIANT[item.confidence] || 'muted'} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => handleDelete(item.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={styles.deleteBtn}>✕</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+      {item.topic ? <Text style={styles.cardTopic}>{item.topic}</Text> : null}
+      <Text style={styles.cardContent} numberOfLines={3}>{item.content}</Text>
+      <View style={styles.cardBottom}>
+        <SubjectBadge subject={item.subject} />
+        <Text style={styles.cardDate}>Reviewed: {formatDate(item.lastReviewed)}</Text>
+      </View>
+    </TouchableOpacity>
+  ), [openEdit, cycleConfidence, handleDelete]);
 
   return (
     <View style={styles.container}>
@@ -76,28 +102,12 @@ export default function FormulaSheetScreen() {
         data={filtered}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        updateCellsBatchingPeriod={50}
+        removeClippedSubviews={true}
         ListEmptyComponent={<EmptyState icon="⚡" title="No formulas yet" subtitle="Add your combat formulas" />}
-        renderItem={({ item }) => (
-          <TouchableOpacity style={styles.card} onPress={() => openEdit(item)} activeOpacity={0.85}>
-            <View style={styles.cardTop}>
-              <Text style={styles.cardName} numberOfLines={1}>{item.name}</Text>
-              <View style={styles.cardActions}>
-                <TouchableOpacity onPress={() => cycleConfidence(item)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Badge label={item.confidence} variant={CONFIDENCE_VARIANT[item.confidence] || 'muted'} />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => deleteFormula(item.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Text style={styles.deleteBtn}>✕</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-            {item.topic ? <Text style={styles.cardTopic}>{item.topic}</Text> : null}
-            <Text style={styles.cardContent} numberOfLines={3}>{item.content}</Text>
-            <View style={styles.cardBottom}>
-              <SubjectBadge subject={item.subject} />
-              <Text style={styles.cardDate}>Reviewed: {formatDate(item.lastReviewed)}</Text>
-            </View>
-          </TouchableOpacity>
-        )}
+        renderItem={renderItem}
       />
 
       <TouchableOpacity style={styles.fab} onPress={openAdd}>
@@ -133,7 +143,7 @@ export default function FormulaSheetScreen() {
       </Modal>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg.primary },

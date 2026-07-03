@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView } from 'react-native';
 import { useStore } from '../store';
 import { Modal } from '../components/Modal';
@@ -15,7 +15,7 @@ import { getTodayStr, formatDate } from '../utils/helpers';
 
 const STATUS_VARIANT = { Pending: 'danger', 'Re-attempted': 'warning', Mastered: 'success' };
 
-export default function ErrorJournalScreen() {
+export default React.memo(function ErrorJournalScreen() {
   const { errors, addErrorLog, updateErrorLog, deleteErrorLog } = useStore();
   const [showModal, setShowModal] = useState(false);
   const [filterSub, setFilterSub] = useState('All');
@@ -28,24 +28,63 @@ export default function ErrorJournalScreen() {
 
   const today = getTodayStr();
 
-  const filtered = errors.filter((e) => {
+  const filtered = useMemo(() => errors.filter((e) => {
     if (filterSub !== 'All' && e.subject !== filterSub) return false;
     if (filterStatus !== 'All' && e.status !== filterStatus) return false;
     return true;
-  }).reverse();
+  }).reverse(), [errors, filterSub, filterStatus]);
 
-  const handleAdd = () => {
+  const handleAdd = useCallback(() => {
     if (!form.topic.trim()) return;
     addErrorLog({ ...form, date: today });
     setForm({ subject: 'Networks', topic: '', source: '', thought: '', correctAnswer: '', ruleViolated: '', errorType: 'Concept Gap', status: 'Pending' });
     setShowModal(false);
-  };
+  }, [form, addErrorLog, today]);
 
-  const cycleStatus = (e) => {
+  const cycleStatus = useCallback((e) => {
     const idx = ERROR_LOG_STATUSES.indexOf(e.status);
     const next = ERROR_LOG_STATUSES[(idx + 1) % ERROR_LOG_STATUSES.length];
     updateErrorLog(e.id, { status: next });
-  };
+  }, [updateErrorLog]);
+
+  const handleDelete = useCallback((id) => {
+    deleteErrorLog(id);
+  }, [deleteErrorLog]);
+
+  const renderItem = useCallback(({ item }) => (
+    <View style={styles.errorCard}>
+      <View style={styles.errorTop}>
+        <View style={styles.errorInfo}>
+          <Text style={styles.errorTopic} numberOfLines={1}>{item.topic}</Text>
+          <Text style={styles.errorSource}>{item.source} · {formatDate(item.date)}</Text>
+        </View>
+        <View style={styles.errorActions}>
+          <TouchableOpacity onPress={() => cycleStatus(item)}>
+            <Badge label={item.status} variant={STATUS_VARIANT[item.status] || 'muted'} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => handleDelete(item.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={styles.deleteBtn}>✕</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+      <View style={styles.errorMeta}>
+        <SubjectBadge subject={item.subject} />
+        <Badge label={item.errorType} variant="outline" style={{ marginLeft: SPACING.xs }} />
+      </View>
+      {item.thought ? (
+        <View style={styles.errorDetail}>
+          <Text style={styles.detailLabel}>My thought:</Text>
+          <Text style={styles.detailText}>{item.thought}</Text>
+        </View>
+      ) : null}
+      {item.correctAnswer ? (
+        <View style={styles.errorDetail}>
+          <Text style={[styles.detailLabel, { color: COLORS.accent.success }]}>Correct:</Text>
+          <Text style={styles.detailText}>{item.correctAnswer}</Text>
+        </View>
+      ) : null}
+    </View>
+  ), [cycleStatus, handleDelete]);
 
   return (
     <View style={styles.container}>
@@ -70,41 +109,12 @@ export default function ErrorJournalScreen() {
         data={filtered}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        updateCellsBatchingPeriod={50}
+        removeClippedSubviews={true}
         ListEmptyComponent={<EmptyState icon="🧠" title="No errors logged" subtitle="Track your mistakes to master them" />}
-        renderItem={({ item }) => (
-          <View style={styles.errorCard}>
-            <View style={styles.errorTop}>
-              <View style={styles.errorInfo}>
-                <Text style={styles.errorTopic} numberOfLines={1}>{item.topic}</Text>
-                <Text style={styles.errorSource}>{item.source} · {formatDate(item.date)}</Text>
-              </View>
-              <View style={styles.errorActions}>
-                <TouchableOpacity onPress={() => cycleStatus(item)}>
-                  <Badge label={item.status} variant={STATUS_VARIANT[item.status] || 'muted'} />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => deleteErrorLog(item.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Text style={styles.deleteBtn}>✕</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-            <View style={styles.errorMeta}>
-              <SubjectBadge subject={item.subject} />
-              <Badge label={item.errorType} variant="outline" style={{ marginLeft: SPACING.xs }} />
-            </View>
-            {item.thought ? (
-              <View style={styles.errorDetail}>
-                <Text style={styles.detailLabel}>My thought:</Text>
-                <Text style={styles.detailText}>{item.thought}</Text>
-              </View>
-            ) : null}
-            {item.correctAnswer ? (
-              <View style={styles.errorDetail}>
-                <Text style={[styles.detailLabel, { color: COLORS.accent.success }]}>Correct:</Text>
-                <Text style={styles.detailText}>{item.correctAnswer}</Text>
-              </View>
-            ) : null}
-          </View>
-        )}
+        renderItem={renderItem}
       />
 
       <TouchableOpacity style={styles.fab} onPress={() => setShowModal(true)}>
@@ -141,7 +151,7 @@ export default function ErrorJournalScreen() {
       </Modal>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg.primary },

@@ -1,29 +1,51 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, PanResponder, StyleSheet } from 'react-native';
 import { COLORS } from '../styles/colors';
 import { SPACING } from '../styles/spacing';
 import { TYPOGRAPHY } from '../styles/typography';
 import { masteryColor } from '../utils/helpers';
 
-export function MasterySlider({ value = 0, onChange, label }) {
+export const MasterySlider = React.memo(function MasterySlider({ value = 0, onSlidingComplete, label }) {
   const [trackWidth, setTrackWidth] = useState(1);
-  const clampedValue = Math.min(100, Math.max(0, value));
+  const [localValue, setLocalValue] = useState(value);
+  const isDragging = useRef(false);
+
+  useEffect(() => {
+    if (!isDragging.current) {
+      setLocalValue(value);
+    }
+  }, [value]);
+
+  const clampedValue = Math.min(100, Math.max(0, localValue));
   const color = masteryColor(clampedValue);
 
-  const panResponder = PanResponder.create({
+  const panResponder = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: () => true,
     onPanResponderGrant: (e) => {
+      isDragging.current = true;
       const { locationX } = e.nativeEvent;
       const newVal = Math.round((locationX / trackWidth) * 100);
-      onChange(Math.min(100, Math.max(0, newVal)));
+      setLocalValue(Math.min(100, Math.max(0, newVal)));
     },
     onPanResponderMove: (e) => {
       const { locationX } = e.nativeEvent;
       const newVal = Math.round((locationX / trackWidth) * 100);
-      onChange(Math.min(100, Math.max(0, newVal)));
+      setLocalValue(Math.min(100, Math.max(0, newVal)));
     },
-  });
+    onPanResponderRelease: () => {
+      isDragging.current = false;
+      if (onSlidingComplete) {
+        onSlidingComplete(localValue);
+      }
+    },
+    onPanResponderTerminate: () => {
+      isDragging.current = false;
+      if (onSlidingComplete) {
+        onSlidingComplete(localValue);
+      }
+    }
+  })).current;
 
   return (
     <View style={styles.container}>
@@ -41,7 +63,7 @@ export function MasterySlider({ value = 0, onChange, label }) {
       </View>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: { width: '100%', paddingVertical: SPACING.xs },

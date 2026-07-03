@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView } from 'react-native';
 import { useStore } from '../store';
 import { Modal } from '../components/Modal';
@@ -12,7 +12,7 @@ import { TYPOGRAPHY } from '../styles/typography';
 import { SUBJECTS } from '../utils/constants';
 import { getTodayStr, formatDate } from '../utils/helpers';
 
-export default function MockAnalyzerScreen() {
+export default React.memo(function MockAnalyzerScreen() {
   const { mocks, addMock, deleteMock } = useStore();
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({
@@ -22,12 +22,17 @@ export default function MockAnalyzerScreen() {
 
   const today = getTodayStr();
 
-  const avgScore = mocks.length > 0
-    ? Math.round(mocks.reduce((a, m) => a + m.overallScore, 0) / mocks.length)
-    : 0;
-  const best = mocks.length > 0 ? Math.max(...mocks.map((m) => m.overallScore)) : 0;
+  const { avgScore, best } = useMemo(() => {
+    const avg = mocks.length > 0
+      ? Math.round(mocks.reduce((a, m) => a + m.overallScore, 0) / mocks.length)
+      : 0;
+    const bst = mocks.length > 0 ? Math.max(...mocks.map((m) => m.overallScore)) : 0;
+    return { avgScore: avg, best: bst };
+  }, [mocks]);
 
-  const handleAdd = () => {
+  const reversedMocks = useMemo(() => [...mocks].reverse(), [mocks]);
+
+  const handleAdd = useCallback(() => {
     if (!form.overallScore) return;
     addMock({
       date: today,
@@ -45,7 +50,40 @@ export default function MockAnalyzerScreen() {
     });
     setForm({ type: 'Full', source: '', overallScore: '', totalAttempted: '', correct: '', wrong: '', unattempted: '', timeTaken: '180', notes: '' });
     setShowModal(false);
-  };
+  }, [form, addMock, today]);
+
+  const handleDelete = useCallback((id) => {
+    deleteMock(id);
+  }, [deleteMock]);
+
+  const renderItem = useCallback(({ item }) => {
+    const accuracy = item.totalAttempted > 0 ? Math.round((item.correct / item.totalAttempted) * 100) : 0;
+    return (
+      <View style={styles.mockCard}>
+        <View style={styles.mockTop}>
+          <View>
+            <Text style={styles.mockScore}>{item.overallScore}</Text>
+            <Text style={styles.mockScoreLabel}>/ 100</Text>
+          </View>
+          <View style={styles.mockInfo}>
+            <Text style={styles.mockType}>{item.type} Mock</Text>
+            {item.source ? <Text style={styles.mockSource}>{item.source}</Text> : null}
+            <Text style={styles.mockDate}>{formatDate(item.date)}</Text>
+          </View>
+          <TouchableOpacity onPress={() => handleDelete(item.id)}>
+            <Text style={styles.deleteBtn}>✕</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.mockStats}>
+          <MiniStat label="Correct" value={item.correct} color={COLORS.accent.success} />
+          <MiniStat label="Wrong" value={item.wrong} color={COLORS.accent.danger} />
+          <MiniStat label="Skip" value={item.unattempted} color={COLORS.text.muted} />
+          <MiniStat label="Accuracy" value={`${accuracy}%`} color={COLORS.accent.primary} />
+        </View>
+        {item.notes ? <Text style={styles.mockNotes}>{item.notes}</Text> : null}
+      </View>
+    );
+  }, [handleDelete]);
 
   return (
     <View style={styles.container}>
@@ -57,38 +95,15 @@ export default function MockAnalyzerScreen() {
       </View>
 
       <FlatList
-        data={[...mocks].reverse()}
+        data={reversedMocks}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        updateCellsBatchingPeriod={50}
+        removeClippedSubviews={true}
         ListEmptyComponent={<EmptyState icon="🧪" title="No mock exams logged" subtitle="Tap + to add your first mock" />}
-        renderItem={({ item }) => {
-          const accuracy = item.totalAttempted > 0 ? Math.round((item.correct / item.totalAttempted) * 100) : 0;
-          return (
-            <View style={styles.mockCard}>
-              <View style={styles.mockTop}>
-                <View>
-                  <Text style={styles.mockScore}>{item.overallScore}</Text>
-                  <Text style={styles.mockScoreLabel}>/ 100</Text>
-                </View>
-                <View style={styles.mockInfo}>
-                  <Text style={styles.mockType}>{item.type} Mock</Text>
-                  {item.source ? <Text style={styles.mockSource}>{item.source}</Text> : null}
-                  <Text style={styles.mockDate}>{formatDate(item.date)}</Text>
-                </View>
-                <TouchableOpacity onPress={() => deleteMock(item.id)}>
-                  <Text style={styles.deleteBtn}>✕</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.mockStats}>
-                <MiniStat label="Correct" value={item.correct} color={COLORS.accent.success} />
-                <MiniStat label="Wrong" value={item.wrong} color={COLORS.accent.danger} />
-                <MiniStat label="Skip" value={item.unattempted} color={COLORS.text.muted} />
-                <MiniStat label="Accuracy" value={`${accuracy}%`} color={COLORS.accent.primary} />
-              </View>
-              {item.notes ? <Text style={styles.mockNotes}>{item.notes}</Text> : null}
-            </View>
-          );
-        }}
+        renderItem={renderItem}
       />
 
       <TouchableOpacity style={styles.fab} onPress={() => setShowModal(true)}>
@@ -133,25 +148,25 @@ export default function MockAnalyzerScreen() {
       </Modal>
     </View>
   );
-}
+});
 
-function StatBox({ label, value, color }) {
+const StatBox = React.memo(function StatBox({ label, value, color }) {
   return (
     <View style={styles.statBox}>
       <Text style={styles.statLabel}>{label}</Text>
       <Text style={[styles.statVal, color && { color }]}>{value}</Text>
     </View>
   );
-}
+});
 
-function MiniStat({ label, value, color }) {
+const MiniStat = React.memo(function MiniStat({ label, value, color }) {
   return (
     <View style={styles.miniStat}>
       <Text style={styles.miniLabel}>{label}</Text>
       <Text style={[styles.miniVal, { color }]}>{value}</Text>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg.primary },

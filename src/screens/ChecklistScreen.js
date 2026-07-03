@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useStore } from '../store';
@@ -14,21 +14,21 @@ import { TYPOGRAPHY } from '../styles/typography';
 import { SUBJECTS, PRIORITY_LEVELS } from '../utils/constants';
 import { getTodayStr } from '../utils/helpers';
 
-export default function ChecklistScreen() {
+export default React.memo(function ChecklistScreen() {
   const { tasks, addTask, updateTask, deleteTask } = useStore();
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ title: '', subject: 'Networks', priority: 'P1', estimatedMinutes: '30' });
 
   // Filter tasks for today
   const todayStr = getTodayStr();
-  const todaysTasks = tasks.filter(t => t.date === todayStr);
+  const todaysTasks = useMemo(() => tasks.filter(t => t.date === todayStr), [tasks, todayStr]);
 
-  const openAdd = () => {
+  const openAdd = useCallback(() => {
     setForm({ title: '', subject: 'Networks', priority: 'P1', estimatedMinutes: '30' });
     setShowModal(true);
-  };
+  }, []);
 
-  const handleSave = () => {
+  const handleSave = useCallback(() => {
     if (!form.title.trim()) return;
     addTask({
       title: form.title,
@@ -39,13 +39,17 @@ export default function ChecklistScreen() {
       date: todayStr,
     });
     setShowModal(false);
-  };
+  }, [form, addTask, todayStr]);
 
-  const toggleTask = (task) => {
+  const toggleTask = useCallback((task) => {
     updateTask(task.id, { completed: !task.completed });
-  };
+  }, [updateTask]);
 
-  const renderTask = ({ item }) => (
+  const handleDeleteTask = useCallback((id) => {
+    deleteTask(id);
+  }, [deleteTask]);
+
+  const renderTask = useCallback(({ item }) => (
     <View style={[styles.taskCard, item.completed && styles.taskCardCompleted]}>
       <TouchableOpacity onPress={() => toggleTask(item)} style={styles.checkBtn}>
         <MaterialCommunityIcons 
@@ -69,11 +73,11 @@ export default function ChecklistScreen() {
         </View>
       </View>
 
-      <TouchableOpacity onPress={() => deleteTask(item.id)} style={styles.deleteBtn}>
+      <TouchableOpacity onPress={() => handleDeleteTask(item.id)} style={styles.deleteBtn}>
         <MaterialCommunityIcons name="trash-can-outline" size={20} color={COLORS.text.muted} />
       </TouchableOpacity>
     </View>
-  );
+  ), [toggleTask, handleDeleteTask]);
 
   return (
     <View style={styles.container}>
@@ -82,6 +86,10 @@ export default function ChecklistScreen() {
         keyExtractor={(item) => item.id}
         renderItem={renderTask}
         contentContainerStyle={styles.listContent}
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        updateCellsBatchingPeriod={50}
+        removeClippedSubviews={true}
         ListEmptyComponent={
           <EmptyState 
             icon="checkbox-marked-outline" 
@@ -141,7 +149,7 @@ export default function ChecklistScreen() {
       </Modal>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg.primary },

@@ -1,12 +1,14 @@
 {
   "expo": {
     "name": "GATE EC 2027",
-    "slug": "gate-ec-dashboard",
+    "slug": "gate-ec-dashboard-2027",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "icon": "./src/assets/icon.png",
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "splash": {
       "image": "./src/assets/splash.png",
       "resizeMode": "contain",
@@ -18,12 +20,16 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./src/assets/icon.png",
+        "foregroundImage": "./src/assets/adaptive-icon.png",
         "backgroundColor": "#0D0F14"
       },
       "package": "com.recgate.dashboard",
       "versionCode": 1,
-      "softwareKeyboardLayoutMode": "pan"
+      "softwareKeyboardLayoutMode": "pan",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./src/assets/favicon.png"
@@ -35,6 +41,12 @@
           "cameraPermission": "Allow GATE EC Dashboard to access your camera for QR code scanning"
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "98b62500-3c29-4267-97a9-83702f993859"
+      }
+    },
+    "owner": "emericreapers-team"
   }
 }

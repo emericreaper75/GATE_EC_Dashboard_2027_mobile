@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
 import { useStore } from '../store';
 import { Modal } from '../components/Modal';
@@ -16,7 +16,7 @@ import { useNavigation } from '@react-navigation/native';
 
 const RESULT_VARIANT = { 'Correct ✅': 'success', 'Wrong ❌': 'danger', 'Skipped ⏭️': 'warning' };
 
-export default function PYQLogScreen() {
+export default React.memo(function PYQLogScreen() {
   const { pyqLogs, addPYQLog, deletePYQLog } = useStore();
   const nav = useNavigation();
   const [showModal, setShowModal] = useState(false);
@@ -30,24 +30,53 @@ export default function PYQLogScreen() {
 
   const today = getTodayStr();
 
-  const filtered = pyqLogs.filter((l) => {
+  const filtered = useMemo(() => pyqLogs.filter((l) => {
     if (filterSub !== 'All' && l.subject !== filterSub) return false;
     if (filterResult !== 'All' && l.result !== filterResult) return false;
     return true;
-  }).reverse();
+  }).reverse(), [pyqLogs, filterSub, filterResult]);
 
   // Stats
-  const total = pyqLogs.length;
-  const correct = pyqLogs.filter((l) => l.result === 'Correct ✅').length;
-  const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0;
-  const todayCount = pyqLogs.filter((l) => l.date === today).length;
+  const { total, correct, accuracy, todayCount } = useMemo(() => {
+    const t = pyqLogs.length;
+    const c = pyqLogs.filter((l) => l.result === 'Correct ✅').length;
+    const acc = t > 0 ? Math.round((c / t) * 100) : 0;
+    const tc = pyqLogs.filter((l) => l.date === today).length;
+    return { total: t, correct: c, accuracy: acc, todayCount: tc };
+  }, [pyqLogs, today]);
 
-  const handleAdd = () => {
+  const handleAdd = useCallback(() => {
     if (!form.topic.trim()) return;
     addPYQLog({ ...form, date: today, timeTaken: parseFloat(form.timeTaken) || 2 });
     setForm({ subject: 'Networks', topic: '', year: '2024', marksType: '1-mark', questionType: 'MCQ', result: 'Correct ✅', timeTaken: '2', notes: '' });
     setShowModal(false);
-  };
+  }, [form, addPYQLog, today]);
+
+  const handleDelete = useCallback((id) => {
+    deletePYQLog(id);
+  }, [deletePYQLog]);
+
+  const handleNavigateMock = useCallback(() => nav.navigate('MockAnalyzer'), [nav]);
+
+  const renderItem = useCallback(({ item }) => (
+    <View style={styles.logRow}>
+      <View style={styles.logBody}>
+        <Text style={styles.logTopic} numberOfLines={2}>{item.topic}</Text>
+        <View style={styles.logMeta}>
+          <SubjectBadge subject={item.subject} />
+          <Text style={styles.logDetail}>{item.year} · {item.marksType} · {item.questionType}</Text>
+        </View>
+        <View style={styles.logMeta}>
+          <Badge label={item.result} variant={RESULT_VARIANT[item.result] || 'muted'} />
+          <Text style={styles.logDetail}>{item.timeTaken}min · {formatDate(item.date)}</Text>
+        </View>
+        {item.notes ? <Text style={styles.logNotes} numberOfLines={1}>{item.notes}</Text> : null}
+      </View>
+      <TouchableOpacity onPress={() => handleDelete(item.id)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+        <Text style={styles.deleteBtn}>✕</Text>
+      </TouchableOpacity>
+    </View>
+  ), [handleDelete]);
 
   return (
     <View style={styles.container}>
@@ -56,7 +85,7 @@ export default function PYQLogScreen() {
         <StatChip label="Total" value={total} />
         <StatChip label="Today" value={todayCount} color={COLORS.accent.primary} />
         <StatChip label="Accuracy" value={`${accuracy}%`} color={accuracy >= 70 ? COLORS.accent.success : COLORS.accent.danger} />
-        <TouchableOpacity style={[styles.statChip, { backgroundColor: 'rgba(59,130,246,0.15)' }]} onPress={() => nav.navigate('MockAnalyzer')}>
+        <TouchableOpacity style={[styles.statChip, { backgroundColor: 'rgba(59,130,246,0.15)' }]} onPress={handleNavigateMock}>
           <Text style={[styles.statVal, { color: COLORS.accent.primary }]}>Mock ›</Text>
         </TouchableOpacity>
       </View>
@@ -74,26 +103,12 @@ export default function PYQLogScreen() {
         data={filtered}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        updateCellsBatchingPeriod={50}
+        removeClippedSubviews={true}
         ListEmptyComponent={<EmptyState icon="📝" title="No PYQs logged yet" subtitle="Tap + to log your first question" />}
-        renderItem={({ item }) => (
-          <View style={styles.logRow}>
-            <View style={styles.logBody}>
-              <Text style={styles.logTopic} numberOfLines={2}>{item.topic}</Text>
-              <View style={styles.logMeta}>
-                <SubjectBadge subject={item.subject} />
-                <Text style={styles.logDetail}>{item.year} · {item.marksType} · {item.questionType}</Text>
-              </View>
-              <View style={styles.logMeta}>
-                <Badge label={item.result} variant={RESULT_VARIANT[item.result] || 'muted'} />
-                <Text style={styles.logDetail}>{item.timeTaken}min · {formatDate(item.date)}</Text>
-              </View>
-              {item.notes ? <Text style={styles.logNotes} numberOfLines={1}>{item.notes}</Text> : null}
-            </View>
-            <TouchableOpacity onPress={() => deletePYQLog(item.id)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-              <Text style={styles.deleteBtn}>✕</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        renderItem={renderItem}
       />
 
       <TouchableOpacity style={styles.fab} onPress={() => setShowModal(true)}>
@@ -144,16 +159,16 @@ export default function PYQLogScreen() {
       </Modal>
     </View>
   );
-}
+});
 
-function StatChip({ label, value, color }) {
+const StatChip = React.memo(function StatChip({ label, value, color }) {
   return (
     <View style={styles.statChip}>
       <Text style={styles.statLabel}>{label}</Text>
       <Text style={[styles.statVal, color && { color }]}>{value}</Text>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg.primary },

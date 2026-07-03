@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
 import { useStore } from '../store';
 import { Badge } from '../components/Badge';
@@ -9,21 +9,21 @@ import { SPACING } from '../styles/spacing';
 import { TYPOGRAPHY } from '../styles/typography';
 import { formatDate } from '../utils/helpers';
 
-export default function SpacedRepetitionScreen() {
+export default React.memo(function SpacedRepetitionScreen() {
   const { formulas, mastery, updateFormula, updateMastery } = useStore();
   const [tab, setTab] = useState('formulas');
 
   const today = new Date().toISOString().split('T')[0];
 
-  const dueFormulas = formulas.filter(
+  const dueFormulas = useMemo(() => formulas.filter(
     (f) => f.srs && f.srs.nextReviewDate <= today
-  );
+  ), [formulas, today]);
 
-  const dueMastery = mastery.filter(
+  const dueMastery = useMemo(() => mastery.filter(
     (m) => m.srs && m.srs.nextReviewDate <= today
-  );
+  ), [mastery, today]);
 
-  const markFormulaReviewed = (f) => {
+  const markFormulaReviewed = useCallback((f) => {
     const nextDate = new Date();
     const interval = (f.srs?.interval || 1) * 2;
     nextDate.setDate(nextDate.getDate() + interval);
@@ -31,9 +31,9 @@ export default function SpacedRepetitionScreen() {
       lastReviewed: today,
       srs: { ...f.srs, interval, nextReviewDate: nextDate.toISOString().split('T')[0] },
     });
-  };
+  }, [updateFormula, today]);
 
-  const markMasteryReviewed = (m) => {
+  const markMasteryReviewed = useCallback((m) => {
     const nextDate = new Date();
     const interval = (m.srs?.interval || 1) * 2;
     nextDate.setDate(nextDate.getDate() + interval);
@@ -41,9 +41,36 @@ export default function SpacedRepetitionScreen() {
       lastUpdated: today,
       srs: { ...m.srs, interval, nextReviewDate: nextDate.toISOString().split('T')[0] },
     });
-  };
+  }, [updateMastery, today]);
 
   const data = tab === 'formulas' ? dueFormulas : dueMastery;
+
+  const renderItem = useCallback(({ item }) => (
+    <View style={styles.reviewCard}>
+      <View style={styles.cardTop}>
+        <SubjectBadge subject={item.subject} />
+        {item.srs?.nextReviewDate ? (
+          <Text style={styles.dueDate}>Due: {formatDate(item.srs.nextReviewDate)}</Text>
+        ) : null}
+      </View>
+      <Text style={styles.itemName}>{item.name || item.topic}</Text>
+      {item.content ? (
+        <Text style={styles.itemContent} numberOfLines={3}>{item.content}</Text>
+      ) : null}
+      {item.notes ? (
+        <Text style={styles.itemContent} numberOfLines={2}>{item.notes}</Text>
+      ) : null}
+      <View style={styles.cardActions}>
+        <Text style={styles.intervalText}>Interval: {item.srs?.interval || 1} day(s)</Text>
+        <TouchableOpacity
+          style={styles.reviewBtn}
+          onPress={() => tab === 'formulas' ? markFormulaReviewed(item) : markMasteryReviewed(item)}
+        >
+          <Text style={styles.reviewBtnTxt}>✓ Mark Reviewed</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  ), [tab, markFormulaReviewed, markMasteryReviewed]);
 
   return (
     <View style={styles.container}>
@@ -61,6 +88,10 @@ export default function SpacedRepetitionScreen() {
         data={data}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        updateCellsBatchingPeriod={50}
+        removeClippedSubviews={true}
         ListEmptyComponent={
           <EmptyState
             icon="✅"
@@ -68,36 +99,11 @@ export default function SpacedRepetitionScreen() {
             subtitle="No items due for review today. Come back tomorrow."
           />
         }
-        renderItem={({ item }) => (
-          <View style={styles.reviewCard}>
-            <View style={styles.cardTop}>
-              <SubjectBadge subject={item.subject} />
-              {item.srs?.nextReviewDate ? (
-                <Text style={styles.dueDate}>Due: {formatDate(item.srs.nextReviewDate)}</Text>
-              ) : null}
-            </View>
-            <Text style={styles.itemName}>{item.name || item.topic}</Text>
-            {item.content ? (
-              <Text style={styles.itemContent} numberOfLines={3}>{item.content}</Text>
-            ) : null}
-            {item.notes ? (
-              <Text style={styles.itemContent} numberOfLines={2}>{item.notes}</Text>
-            ) : null}
-            <View style={styles.cardActions}>
-              <Text style={styles.intervalText}>Interval: {item.srs?.interval || 1} day(s)</Text>
-              <TouchableOpacity
-                style={styles.reviewBtn}
-                onPress={() => tab === 'formulas' ? markFormulaReviewed(item) : markMasteryReviewed(item)}
-              >
-                <Text style={styles.reviewBtnTxt}>✓ Mark Reviewed</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
+        renderItem={renderItem}
       />
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg.primary },

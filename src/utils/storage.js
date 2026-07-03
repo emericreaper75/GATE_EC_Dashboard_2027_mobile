@@ -52,7 +52,6 @@ export const storage = {
       if (data !== null) return JSON.parse(data);
       return getDefaults(key);
     } catch (error) {
-      console.error(`[storage.get] ${key}:`, error);
       return getDefaults(key);
     }
   },
@@ -62,7 +61,6 @@ export const storage = {
       await AsyncStorage.setItem(STORE_KEYS[key], JSON.stringify(value));
       return true;
     } catch (error) {
-      console.error(`[storage.set] ${key}:`, error);
       return false;
     }
   },
@@ -75,7 +73,6 @@ export const storage = {
       await this.set(key, updated);
       return newItem.id;
     } catch (error) {
-      console.error(`[storage.add] ${key}:`, error);
       return null;
     }
   },
@@ -89,7 +86,6 @@ export const storage = {
       await this.set(key, updated);
       return true;
     } catch (error) {
-      console.error(`[storage.update] ${key}:`, error);
       return false;
     }
   },
@@ -101,7 +97,6 @@ export const storage = {
       await this.set(key, updated);
       return true;
     } catch (error) {
-      console.error(`[storage.delete] ${key}:`, error);
       return false;
     }
   },
@@ -114,7 +109,6 @@ export const storage = {
       }
       return JSON.stringify(allData, null, 2);
     } catch (error) {
-      console.error('[storage.exportAll]:', error);
       return null;
     }
   },
@@ -129,7 +123,6 @@ export const storage = {
       }
       return true;
     } catch (error) {
-      console.error('[storage.importAll]:', error);
       return false;
     }
   },
@@ -139,7 +132,6 @@ export const storage = {
       await AsyncStorage.multiRemove(Object.values(STORE_KEYS));
       return true;
     } catch (error) {
-      console.error('[storage.resetAll]:', error);
       return false;
     }
   },

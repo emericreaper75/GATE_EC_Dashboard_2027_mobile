@@ -9,6 +9,7 @@ import {
   Platform,
   Animated,
   ScrollView,
+  InteractionManager,
 } from 'react-native';
 import { COLORS } from '../styles/colors';
 import { RADIUS, SPACING } from '../styles/spacing';
@@ -19,18 +20,22 @@ export function Modal({ visible, onClose, title, children, scrollable = true }) 
 
   useEffect(() => {
     if (visible) {
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        useNativeDriver: true,
-        tension: 80,
-        friction: 12,
-      }).start();
+      InteractionManager.runAfterInteractions(() => {
+        Animated.spring(slideAnim, {
+          toValue: 0,
+          useNativeDriver: true,
+          tension: 80,
+          friction: 12,
+        }).start();
+      });
     } else {
-      Animated.timing(slideAnim, {
-        toValue: 300,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
+      InteractionManager.runAfterInteractions(() => {
+        Animated.timing(slideAnim, {
+          toValue: 300,
+          duration: 200,
+          useNativeDriver: true,
+        }).start();
+      });
     }
   }, [visible]);
 

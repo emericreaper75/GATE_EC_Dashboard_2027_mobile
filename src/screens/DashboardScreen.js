@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { ScrollView, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -11,9 +11,16 @@ import { SPACING } from '../styles/spacing';
 import { TYPOGRAPHY } from '../styles/typography';
 import { masteryColor, pct } from '../utils/helpers';
 
-export default function DashboardScreen() {
+export default React.memo(function DashboardScreen() {
   const stats = useDashboardStats();
   const nav = useNavigation();
+
+  const handleNavTasks = useCallback(() => nav.navigate('TasksStack', { screen: 'Checklist' }), [nav]);
+  const handleNavPYQ = useCallback(() => nav.navigate('PYQStack', { screen: 'PYQLog' }), [nav]);
+  const handleNavError = useCallback(() => nav.navigate('MoreStack', { screen: 'ErrorJournal' }), [nav]);
+  const handleNavSubjects = useCallback(() => nav.navigate('SubjectsStack', { screen: 'SubjectTracker' }), [nav]);
+  const handleNavMock = useCallback(() => nav.navigate('PYQStack', { screen: 'MockAnalyzer' }), [nav]);
+  const handleNavTimer = useCallback(() => nav.navigate('MoreStack', { screen: 'FocusTimer' }), [nav]);
 
   return (
     <ScrollView
@@ -86,12 +93,12 @@ export default function DashboardScreen() {
       {/* ── Quick Actions ─────────────────────────────────────────── */}
       <Text style={styles.quickTitle}>QUICK ACTIONS</Text>
       <View style={styles.quickGrid}>
-        <QuickAction icon="checkbox-marked-outline" label="Add Task" onPress={() => nav.navigate('TasksStack', { screen: 'Checklist' })} />
-        <QuickAction icon="clipboard-list-outline" label="Log PYQ" onPress={() => nav.navigate('PYQStack', { screen: 'PYQLog' })} />
-        <QuickAction icon="alert-circle-outline" label="Log Error" onPress={() => nav.navigate('MoreStack', { screen: 'ErrorJournal' })} />
-        <QuickAction icon="book-open-outline" label="Subjects" onPress={() => nav.navigate('SubjectsStack', { screen: 'SubjectTracker' })} />
-        <QuickAction icon="flask-outline" label="Mock Exam" onPress={() => nav.navigate('PYQStack', { screen: 'MockAnalyzer' })} />
-        <QuickAction icon="timer-outline" label="Focus Timer" onPress={() => nav.navigate('MoreStack', { screen: 'FocusTimer' })} />
+        <QuickAction icon="checkbox-marked-outline" label="Add Task" onPress={handleNavTasks} />
+        <QuickAction icon="clipboard-list-outline" label="Log PYQ" onPress={handleNavPYQ} />
+        <QuickAction icon="alert-circle-outline" label="Log Error" onPress={handleNavError} />
+        <QuickAction icon="book-open-outline" label="Subjects" onPress={handleNavSubjects} />
+        <QuickAction icon="flask-outline" label="Mock Exam" onPress={handleNavMock} />
+        <QuickAction icon="timer-outline" label="Focus Timer" onPress={handleNavTimer} />
       </View>
 
       {/* ── Recent Activity ───────────────────────────────────────── */}
@@ -115,18 +122,18 @@ export default function DashboardScreen() {
       )}
     </ScrollView>
   );
-}
+});
 
-function StatTile({ label, value, color }) {
+const StatTile = React.memo(function StatTile({ label, value, color }) {
   return (
     <View style={styles.statTile}>
       <Text style={styles.statLabel}>{label}</Text>
       <Text style={[styles.statValue, { color }]}>{value ?? 0}</Text>
     </View>
   );
-}
+});
 
-function QuickAction({ icon, label, onPress }) {
+const QuickAction = React.memo(function QuickAction({ icon, label, onPress }) {
   return (
     <TouchableOpacity style={styles.quickItem} onPress={onPress} activeOpacity={0.75}>
       <View style={styles.quickIcon}>
@@ -135,7 +142,7 @@ function QuickAction({ icon, label, onPress }) {
       <Text style={styles.quickLabel}>{label}</Text>
     </TouchableOpacity>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg.primary },

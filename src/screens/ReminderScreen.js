@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Switch } from 'react-native';
 import { useStore } from '../store';
 import { Modal } from '../components/Modal';
@@ -12,32 +12,64 @@ import { TYPOGRAPHY } from '../styles/typography';
 import { REPEAT_OPTIONS } from '../utils/constants';
 import { formatTime } from '../utils/helpers';
 
-export default function ReminderScreen() {
+export default React.memo(function ReminderScreen() {
   const { reminders, addReminder, updateReminder, deleteReminder } = useStore();
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem] = useState(null);
   const [form, setForm] = useState({ title: '', message: '', time: '08:00', repeat: 'daily' });
 
-  const openAdd = () => {
+  const openAdd = useCallback(() => {
     setEditItem(null);
     setForm({ title: '', message: '', time: '08:00', repeat: 'daily' });
     setShowModal(true);
-  };
+  }, []);
 
-  const openEdit = (r) => {
+  const openEdit = useCallback((r) => {
     setEditItem(r);
     setForm({ title: r.title, message: r.message, time: r.time, repeat: r.repeat });
     setShowModal(true);
-  };
+  }, []);
 
-  const handleSave = () => {
+  const handleSave = useCallback(() => {
     if (!form.title.trim()) return;
     if (editItem) updateReminder(editItem.id, form);
     else addReminder({ ...form, active: true });
     setShowModal(false);
-  };
+  }, [form, editItem, updateReminder, addReminder]);
+
+  const toggleActive = useCallback((id, val) => {
+    updateReminder(id, { active: val });
+  }, [updateReminder]);
+
+  const handleDelete = useCallback((id) => {
+    deleteReminder(id);
+  }, [deleteReminder]);
 
   const REPEAT_VARIANT = { daily: 'primary', weekly: 'warning', 'one-time': 'muted' };
+
+  const renderItem = useCallback(({ item }) => (
+    <TouchableOpacity style={[styles.reminderRow, !item.active && styles.reminderInactive]} onPress={() => openEdit(item)} activeOpacity={0.8}>
+      <View style={styles.reminderLeft}>
+        <Text style={styles.reminderTime}>{formatTime(item.time)}</Text>
+        <Badge label={item.repeat} variant={REPEAT_VARIANT[item.repeat] || 'muted'} style={styles.repeatBadge} />
+      </View>
+      <View style={styles.reminderBody}>
+        <Text style={[styles.reminderTitle, !item.active && styles.mutedText]}>{item.title}</Text>
+        {item.message ? <Text style={styles.reminderMsg} numberOfLines={1}>{item.message}</Text> : null}
+      </View>
+      <View style={styles.reminderRight}>
+        <Switch
+          value={item.active}
+          onValueChange={(v) => toggleActive(item.id, v)}
+          trackColor={{ false: COLORS.border, true: COLORS.accent.primary }}
+          thumbColor={COLORS.text.primary}
+        />
+        <TouchableOpacity onPress={() => handleDelete(item.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Text style={styles.deleteBtn}>✕</Text>
+        </TouchableOpacity>
+      </View>
+    </TouchableOpacity>
+  ), [openEdit, toggleActive, handleDelete, REPEAT_VARIANT]);
 
   return (
     <View style={styles.container}>
@@ -45,30 +77,12 @@ export default function ReminderScreen() {
         data={reminders}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        updateCellsBatchingPeriod={50}
+        removeClippedSubviews={true}
         ListEmptyComponent={<EmptyState icon="🔔" title="No reminders set" subtitle="Tap + to add a reminder" />}
-        renderItem={({ item }) => (
-          <TouchableOpacity style={[styles.reminderRow, !item.active && styles.reminderInactive]} onPress={() => openEdit(item)} activeOpacity={0.8}>
-            <View style={styles.reminderLeft}>
-              <Text style={styles.reminderTime}>{formatTime(item.time)}</Text>
-              <Badge label={item.repeat} variant={REPEAT_VARIANT[item.repeat] || 'muted'} style={styles.repeatBadge} />
-            </View>
-            <View style={styles.reminderBody}>
-              <Text style={[styles.reminderTitle, !item.active && styles.mutedText]}>{item.title}</Text>
-              {item.message ? <Text style={styles.reminderMsg} numberOfLines={1}>{item.message}</Text> : null}
-            </View>
-            <View style={styles.reminderRight}>
-              <Switch
-                value={item.active}
-                onValueChange={(v) => updateReminder(item.id, { active: v })}
-                trackColor={{ false: COLORS.border, true: COLORS.accent.primary }}
-                thumbColor={COLORS.text.primary}
-              />
-              <TouchableOpacity onPress={() => deleteReminder(item.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Text style={styles.deleteBtn}>✕</Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        )}
+        renderItem={renderItem}
       />
 
       <TouchableOpacity style={styles.fab} onPress={openAdd}>
@@ -93,7 +107,7 @@ export default function ReminderScreen() {
       </Modal>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg.primary },

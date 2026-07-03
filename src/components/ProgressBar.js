@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { View, Animated, StyleSheet } from 'react-native';
+import { View, Animated, StyleSheet, InteractionManager } from 'react-native';
 import { COLORS } from '../styles/colors';
 import { RADIUS } from '../styles/spacing';
 
@@ -14,11 +14,13 @@ export function ProgressBar({ value = 0, color, height = 6, style }) {
   );
 
   useEffect(() => {
-    Animated.timing(animWidth, {
-      toValue: clampedValue,
-      duration: 500,
-      useNativeDriver: false,
-    }).start();
+    InteractionManager.runAfterInteractions(() => {
+      Animated.timing(animWidth, {
+        toValue: clampedValue,
+        duration: 500,
+        useNativeDriver: false,
+      }).start();
+    });
   }, [clampedValue]);
 
   return (
